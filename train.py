@@ -380,7 +380,6 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 if opt.quad:
                     loss *= 4.0
 
-            Backward
             with torch.autograd.detect_anomaly():
                 torch.use_deterministic_algorithms(False)
                 # scaler.scale(loss).backward()
