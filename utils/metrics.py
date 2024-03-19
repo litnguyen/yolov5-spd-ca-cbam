@@ -13,13 +13,13 @@ from utils import TryExcept, threaded
 
 
 def fitness(x):
-    # Model fitness as a weighted combination of metrics
+    """Calculates fitness of a model using weighted sum of metrics P, R, mAP@0.5, mAP@0.5:0.95."""
     w = [0.0, 0.0, 0.1, 0.9]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
     return (x[:, :4] * w).sum(1)
 
 
 def smooth(y, f=0.05):
-    # Box filter of fraction f
+    """Applies box filter smoothing to array `y` with fraction `f`, yielding a smoothed array."""
     nf = round(len(y) * f * 2) // 2 + 1  # number of filter elements (must be odd)
     p = np.ones(nf // 2)  # ones padding
     yp = np.concatenate((p * y[0], y, p * y[-1]), 0)  # y padded
@@ -126,6 +126,7 @@ def compute_ap(recall, precision):
 class ConfusionMatrix:
     # Updated version of https://github.com/kaanakan/object_detection_confusion_matrix
     def __init__(self, nc, conf=0.25, iou_thres=0.45):
+        """Initializes ConfusionMatrix with given number of classes, confidence, and IoU threshold."""
         self.matrix = np.zeros((nc + 1, nc + 1))
         self.nc = nc  # number of classes
         self.conf = conf
@@ -179,6 +180,9 @@ class ConfusionMatrix:
                     self.matrix[dc, self.nc] += 1  # predicted background
 
     def tp_fp(self):
+        """Calculates true positives (tp) and false positives (fp) excluding the background class from the confusion
+        matrix.
+        """
         tp = self.matrix.diagonal()  # true positives
         fp = self.matrix.sum(1) - tp  # false positives
         # fn = self.matrix.sum(0) - tp  # false negatives (missed detections)
@@ -186,6 +190,7 @@ class ConfusionMatrix:
 
     @TryExcept("WARNING ⚠️ ConfusionMatrix plot failure")
     def plot(self, normalize=True, save_dir="", names=()):
+        """Plots confusion matrix using seaborn, optional normalization; can save plot to specified directory."""
         import seaborn as sn
 
         array = self.matrix / ((self.matrix.sum(0).reshape(1, -1) + 1e-9) if normalize else 1)  # normalize columns
@@ -217,100 +222,56 @@ class ConfusionMatrix:
         plt.close(fig)
 
     def print(self):
+        """Prints the confusion matrix row-wise, with each class and its predictions separated by spaces."""
         for i in range(self.nc + 1):
             print(" ".join(map(str, self.matrix[i])))
 
 
-# def bbox_iou(box1, box2, xywh=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7):
-#     # Returns Intersection over Union (IoU) of box1(1,4) to box2(n,4)
-
-#     # Get the coordinates of bounding boxes
-#     if xywh:  # transform from xywh to xyxy
-#         (x1, y1, w1, h1), (x2, y2, w2, h2) = box1.chunk(4, -1), box2.chunk(4, -1)
-#         w1_, h1_, w2_, h2_ = w1 / 2, h1 / 2, w2 / 2, h2 / 2
-#         b1_x1, b1_x2, b1_y1, b1_y2 = x1 - w1_, x1 + w1_, y1 - h1_, y1 + h1_
-#         b2_x1, b2_x2, b2_y1, b2_y2 = x2 - w2_, x2 + w2_, y2 - h2_, y2 + h2_
-#     else:  # x1, y1, x2, y2 = box1
-#         b1_x1, b1_y1, b1_x2, b1_y2 = box1.chunk(4, -1)
-#         b2_x1, b2_y1, b2_x2, b2_y2 = box2.chunk(4, -1)
-#         w1, h1 = b1_x2 - b1_x1, (b1_y2 - b1_y1).clamp(eps)
-#         w2, h2 = b2_x2 - b2_x1, (b2_y2 - b2_y1).clamp(eps)
-
-#     # Intersection area
-#     inter = (b1_x2.minimum(b2_x2) - b1_x1.maximum(b2_x1)).clamp(0) * (
-#         b1_y2.minimum(b2_y2) - b1_y1.maximum(b2_y1)
-#     ).clamp(0)
-
-#     # Union Area
-#     union = w1 * h1 + w2 * h2 - inter + eps
-
-#     # IoU
-#     iou = inter / union
-#     if CIoU or DIoU or GIoU:
-#         cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # convex (smallest enclosing box) width
-#         ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
-#         if CIoU or DIoU:  # Distance or Complete IoU https://arxiv.org/abs/1911.08287v1
-#             c2 = cw**2 + ch**2 + eps  # convex diagonal squared
-#             rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2) ** 2 + (b2_y1 + b2_y2 - b1_y1 - b1_y2) ** 2) / 4  # center dist ** 2
-#             if CIoU:  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
-#                 v = (4 / math.pi**2) * (torch.atan(w2 / h2) - torch.atan(w1 / h1)).pow(2)
-#                 with torch.no_grad():
-#                     alpha = v / (v - iou + (1 + eps))
-#                 return iou - (rho2 / c2 + v * alpha)  # CIoU
-#             return iou - rho2 / c2  # DIoU
-#         c_area = cw * ch + eps  # convex area
-#         return iou - (c_area - union) / c_area  # GIoU https://arxiv.org/pdf/1902.09630.pdf
-#     return iou  # IoU
-
-def bbox_iou(box1, box2):
+def bbox_iou(box1, box2, xywh=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7):
     """
-    Calculate the Complete Intersection over Union (CIoU) between two bounding boxes.
+    Calculates IoU, GIoU, DIoU, or CIoU between two boxes, supporting xywh/xyxy formats.
+
+    Input shapes are box1(1,4) to box2(n,4).
     """
-    # Ensure input tensors have shape [N, 4]
-    if len(box1.shape) == 1:
-        box1 = box1.unsqueeze(0)
-    if len(box2.shape) == 1:
-        box2 = box2.unsqueeze(0)
 
-    # Split boxes into x and y components
-    box1_x1, box1_y1, box1_x2, box1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
-    box2_x1, box2_y1, box2_x2, box2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
+    # Get the coordinates of bounding boxes
+    if xywh:  # transform from xywh to xyxy
+        (x1, y1, w1, h1), (x2, y2, w2, h2) = box1.chunk(4, -1), box2.chunk(4, -1)
+        w1_, h1_, w2_, h2_ = w1 / 2, h1 / 2, w2 / 2, h2 / 2
+        b1_x1, b1_x2, b1_y1, b1_y2 = x1 - w1_, x1 + w1_, y1 - h1_, y1 + h1_
+        b2_x1, b2_x2, b2_y1, b2_y2 = x2 - w2_, x2 + w2_, y2 - h2_, y2 + h2_
+    else:  # x1, y1, x2, y2 = box1
+        b1_x1, b1_y1, b1_x2, b1_y2 = box1.chunk(4, -1)
+        b2_x1, b2_y1, b2_x2, b2_y2 = box2.chunk(4, -1)
+        w1, h1 = b1_x2 - b1_x1, (b1_y2 - b1_y1).clamp(eps)
+        w2, h2 = b2_x2 - b2_x1, (b2_y2 - b2_y1).clamp(eps)
 
-    # Calculate areas of bounding boxes
-    box1_area = (box1_x2 - box1_x1) * (box1_y2 - box1_y1)
-    box2_area = (box2_x2 - box2_x1) * (box2_y2 - box2_y1)
+    # Intersection area
+    inter = (b1_x2.minimum(b2_x2) - b1_x1.maximum(b2_x1)).clamp(0) * (
+        b1_y2.minimum(b2_y2) - b1_y1.maximum(b2_y1)
+    ).clamp(0)
 
-    # Calculate coordinates of intersection rectangle
-    intersect_x1 = torch.max(box1_x1, box2_x1)
-    intersect_y1 = torch.max(box1_y1, box2_y1)
-    intersect_x2 = torch.min(box1_x2, box2_x2)
-    intersect_y2 = torch.min(box1_y2, box2_y2)
+    # Union Area
+    union = w1 * h1 + w2 * h2 - inter + eps
 
-    # Calculate width and height of intersection rectangle
-    intersect_width = torch.clamp(intersect_x2 - intersect_x1, min=0)
-    intersect_height = torch.clamp(intersect_y2 - intersect_y1, min=0)
+    # IoU
+    iou = inter / union
+    if CIoU or DIoU or GIoU:
+        cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # convex (smallest enclosing box) width
+        ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
+        if CIoU or DIoU:  # Distance or Complete IoU https://arxiv.org/abs/1911.08287v1
+            c2 = cw**2 + ch**2 + eps  # convex diagonal squared
+            rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2) ** 2 + (b2_y1 + b2_y2 - b1_y1 - b1_y2) ** 2) / 4  # center dist ** 2
+            if CIoU:  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
+                v = (4 / math.pi**2) * (torch.atan(w2 / h2) - torch.atan(w1 / h1)).pow(2)
+                with torch.no_grad():
+                    alpha = v / (v - iou + (1 + eps))
+                return iou - (rho2 / c2 + v * alpha)  # CIoU
+            return iou - rho2 / c2  # DIoU
+        c_area = cw * ch + eps  # convex area
+        return iou - (c_area - union) / c_area  # GIoU https://arxiv.org/pdf/1902.09630.pdf
+    return iou  # IoU
 
-    # Calculate area of intersection rectangle
-    intersect_area = intersect_width * intersect_height
-
-    # Calculate Union area
-    union_area = box1_area + box2_area - intersect_area
-
-    # Calculate IoU
-    iou = intersect_area / (union_area + 1e-7)
-
-    # Calculate diagonal distance
-    center_dist = ((box2_x1 + box2_x2) - (box1_x1 + box1_x2)).pow(2) + ((box2_y1 + box2_y2) - (box1_y1 + box1_y2)).pow(2)
-    diagonal = torch.sqrt(center_dist + 1e-7)
-
-    # Calculate squared Euclidean distance
-    squared_euclidean = ((box2_x1 + box2_x2) - (box1_x1 + box1_x2)).pow(2) + ((box2_y1 + box2_y2) - (box1_y1 + box1_y2)).pow(2)
-
-    # Calculate CIoU
-    ciou_term = squared_euclidean / (diagonal.pow(2) + 1e-7)
-    ciou = iou - ciou_term
-
-    return ciou
 
 def box_iou(box1, box2, eps=1e-7):
     # https://github.com/pytorch/vision/blob/master/torchvision/ops/boxes.py
@@ -361,7 +322,9 @@ def bbox_ioa(box1, box2, eps=1e-7):
 
 
 def wh_iou(wh1, wh2, eps=1e-7):
-    # Returns the nxm IoU matrix. wh1 is nx2, wh2 is mx2
+    """Calculates the Intersection over Union (IoU) for two sets of widths and heights; `wh1` and `wh2` should be nx2
+    and mx2 tensors.
+    """
     wh1 = wh1[:, None]  # [N,1,2]
     wh2 = wh2[None]  # [1,M,2]
     inter = torch.min(wh1, wh2).prod(2)  # [N,M]
@@ -373,7 +336,9 @@ def wh_iou(wh1, wh2, eps=1e-7):
 
 @threaded
 def plot_pr_curve(px, py, ap, save_dir=Path("pr_curve.png"), names=()):
-    # Precision-recall curve
+    """Plots precision-recall curve, optionally per class, saving to `save_dir`; `px`, `py` are lists, `ap` is Nx2
+    array, `names` optional.
+    """
     fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
     py = np.stack(py, axis=1)
 
@@ -396,7 +361,7 @@ def plot_pr_curve(px, py, ap, save_dir=Path("pr_curve.png"), names=()):
 
 @threaded
 def plot_mc_curve(px, py, save_dir=Path("mc_curve.png"), names=(), xlabel="Confidence", ylabel="Metric"):
-    # Metric-confidence curve
+    """Plots a metric-confidence curve for model predictions, supporting per-class visualization and smoothing."""
     fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
 
     if 0 < len(names) < 21:  # display per-class legend if < 21 classes
