@@ -114,8 +114,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         opt.noval,
         opt.nosave,
         opt.workers,
-        opt.freeze,
-        opt.soft
+        opt.freeze
     )
     callbacks.run("on_pretrain_routine_start")
 
@@ -560,8 +559,6 @@ def parse_opt(known=False):
     # NDJSON logging
     parser.add_argument("--ndjson-console", action="store_true", help="Log ndjson to console")
     parser.add_argument("--ndjson-file", action="store_true", help="Log ndjson to file")
-
-    parser.add_argument("--soft", type=float, default=None, help="use Soft-NMS")
 
     return parser.parse_known_args()[0] if known else parser.parse_args()
 
