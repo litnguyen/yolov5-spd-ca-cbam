@@ -498,7 +498,6 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                         plots=plots,
                         callbacks=callbacks,
                         compute_loss=compute_loss,
-                        soft = soft_nms,
                     )  # val best model with plots
                     if is_coco:
                         callbacks.run("on_fit_epoch_end", list(mloss) + list(results) + lr, epoch, best_fitness, fi)
