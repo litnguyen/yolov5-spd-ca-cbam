@@ -153,6 +153,27 @@ class CBAM(nn.Module):
         out = self.spatial_attention(out) * out
         return out
 
+class CBAMBottleneck(nn.Module):
+    # ch_in, ch_out, shortcut, groups, expansion, ratio, kernel_size
+    def __init__(self, c1, c2, kernel_size=3, shortcut=True, g=1, e=0.5, ratio=16):
+        super(CBAMBottleneck, self).__init__()
+        c_ = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.cv2 = Conv(c_, c2, 3, 1, g=g)
+        self.add = shortcut and c1 == c2
+        # 加入CBAM模块
+        self.channel_attention = ChannelAttentionModule(c2, ratio)
+        self.spatial_attention = SpatialAttentionModule(kernel_size)
+
+    def forward(self, x):
+        # 考虑加入CBAM模块的位置：bottleneck模块刚开始时、bottleneck模块中shortcut之前，这里选择在shortcut之前
+        x2 = self.cv2(self.cv1(x))  # x和x2的channel数相同
+        # 在bottleneck模块中shortcut之前加入CBAM模块
+        out = self.channel_attention(x2) * x2
+        # print('outchannels:{}'.format(out.shape))
+        out = self.spatial_attention(out) * out
+        return x + out if self.add else out
+
 # ---------------------------------------------------------------------
 class SpaceToDepth(nn.Module):
     def __init__(self, block_size=2):
