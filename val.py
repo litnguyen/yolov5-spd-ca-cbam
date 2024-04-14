@@ -308,16 +308,22 @@ def run(
     if nt.sum() == 0:
         LOGGER.warning(f"WARNING ⚠️ no labels found in {task} set, can not compute metrics without labels")
 
+# ---------- Write result to csv -----------------
+    # print results per class
     import pandas as pd
     df = pd.DataFrame(columns=['Class', 'Images', 'Instances','P','R','mAP50','mAP'])
-    # Print results per class
     if (verbose or (nc < 50 and not training)) and nc > 1 and len(stats):
         for i, c in enumerate(ap_class):
+            LOGGER.info(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
             df2_dict = {'Class': [names[c]], 'Images':[seen] , 'Instances': [nt[c]], 'P':[p[i]],'R':[r[i]],'mAP50':[ap50[i]],'mAP':[ap[i]]}
             df2 = pd.DataFrame.from_dict(df2_dict)
             df = pd.concat([df, df2], ignore_index = True)
-            LOGGER.info(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
-    df.to_csv("/content/yolov5-spd-ca-cbam/val.csv")
+    dict_all = {'Class': ['all'], 'Images':[seen] , 'Instances': [sum(df['Instances'])], 'P':[(df['P']).mean()],'R':[(df['R']).mean()],'mAP50':[(df['mAP50']).mean()],'mAP':[(df['mAP']).mean()]}
+    df_all = pd.DataFrame.from_dict(dict_all)
+    df = pd.concat([df,df_all],ignore_index=True)
+    df.to_csv("/content/yolov5-spd-ca-cbam/val.csv") # write file csv to your path 
+
+# ------------------------------
 
     # Print speeds
     t = tuple(x.t / seen * 1e3 for x in dt)  # speeds per image
